@@ -140,6 +140,7 @@ def solve_poisson_naive(verts, indices,
         coo_row.append(r)
         coo_col.append(c)
         coo_data.append(d)
+
     cur_row = 0
     for ovidx in range(len(verts)):
         if ovidx in boundary_vids_set:
@@ -161,16 +162,13 @@ def solve_poisson_naive(verts, indices,
     solved = np.zeros((num_param, 3))
     for c in range(3):
         b = b_offset[..., c]
-        for j in range(num_param):
-            b[j] += laps[prm2org_map[j]][c]
+        b += laps[list(prm2org_map.values())][..., c]
         solved[..., c] = linalg.spsolve(A, b)
 
     # Copy to original index
-    # TODO: Batch
     verts_poisson = verts_updated.copy()
-    for pidx in range(num_param):
-        for c in range(3):
-            verts_poisson[prm2org_map[pidx]][c] = solved[pidx][c]
+    verts_poisson[list(prm2org_map.values())
+                  ] = solved[list(prm2org_map.keys())]
 
     return verts_poisson
 
