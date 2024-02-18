@@ -18,10 +18,10 @@ if __name__ == '__main__':
 
     poisson_verts, poisson_indices = pmc.poisson_mesh_connecting(
         cylinder.verts, cylinder.indices, cylinder_boundary,
-        face.verts, face.indices, face_boundary)
+        face.verts, face.indices, face_boundary, True)
     obj_io.saveObjSimple('face2cylinder.obj', poisson_verts, poisson_indices)
 
     poisson_verts, poisson_indices = pmc.poisson_mesh_connecting(
         face.verts, face.indices, face_boundary,
-        cylinder.verts, cylinder.indices, cylinder_boundary,)
+        cylinder.verts, cylinder.indices, cylinder_boundary, True)
     obj_io.saveObjSimple('cylinder2face.obj', poisson_verts, poisson_indices)

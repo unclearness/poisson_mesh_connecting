@@ -207,7 +207,8 @@ def connect_mesh(verts0, indices0, boundary0, verts1, indices1, boundary1):
 
 
 def poisson_mesh_connecting(pinned_verts, pinned_indices, pinned_boundary_vids,
-                            free_verts, free_indices, free_boundary_vids):
+                            free_verts, free_indices, free_boundary_vids,
+                            connect):
     # Alignment based on the boundary correspondence
     pinned_boundary_verts = pinned_verts[pinned_boundary_vids]
     free_boundary_verts = free_verts[free_boundary_vids]
@@ -221,6 +222,7 @@ def poisson_mesh_connecting(pinned_verts, pinned_indices, pinned_boundary_vids,
     verts_poisson = solve_poisson_naive(free_verts_transed, free_indices,
                                         free_boundary_vids,
                                         pinned_boundary_verts)
-
+    if not connect:
+        return verts_poisson, free_indices
     return connect_mesh(pinned_verts, pinned_indices, pinned_boundary_vids,
                         verts_poisson, free_indices, free_boundary_vids)
