@@ -1,6 +1,8 @@
 ## Poisson Mesh Connecting
-This repo is a very partial implementation of [1] and focuses on merging/connecting functionality, as in Fig. 9, Fig. 11, and Fig. 12 of the paper.
+This repo is a partial implementation of [1] and focuses on merging/connecting functionality, as in Fig. 9, Fig. 11, and Fig. 12 of the paper.
 Currently, naive Poisson (i.e., without scale and rotation consideration) is implemented.
+However, similarity transform alignment for boundary correspondence is applied before constructing Poisson's equation.
+This preprocess eases artifacts caused by scale and rotation up to some extent.
 
 ## Try
 ```
