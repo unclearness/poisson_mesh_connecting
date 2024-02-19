@@ -167,8 +167,7 @@ def solve_poisson_naive(verts, indices,
 
     # Copy to original index
     verts_poisson = verts_updated.copy()
-    verts_poisson[list(prm2org_map.values())
-                  ] = solved[list(prm2org_map.keys())]
+    verts_poisson[list(prm2org_map.values())] = solved
 
     return verts_poisson
 
@@ -193,6 +192,7 @@ def connect_mesh(verts0, indices0, boundary0, verts1, indices1, boundary1):
     merged_indices = indices0.tolist()
 
     offset = len(verts0)
+
     for fidx in range(len(indices1)):
         new_face = [-1, -1, -1]
         for j in range(3):
