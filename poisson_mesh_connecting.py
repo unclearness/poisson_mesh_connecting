@@ -1,5 +1,9 @@
 import numpy as np
-from scipy.sparse import coo_matrix, linalg
+try:
+    from scipy.sparse import coo_matrix, linalg
+    is_scipy_available = True
+except ImportError:
+    is_scipy_available = False
 
 
 def umeyama(src, dst, estimate_scale):
@@ -111,7 +115,8 @@ def compute_mesh_laplacian(verts, indices, adj=None):
 
 
 def solve_poisson_naive(verts, indices,
-                        boundary_vids, boundary_verts_new):
+                        boundary_vids, boundary_verts_new,
+                        use_sparse=is_scipy_available):
     boundary_vids_set = set(boundary_vids)
     va = generate_vertex_adjacency(indices, len(verts))
 
@@ -154,17 +159,26 @@ def solve_poisson_naive(verts, indices,
                 add_triplet(cur_row, org2prm_map[vid], -1.0)
         cur_row += 1
 
-    A = coo_matrix((coo_data, (coo_row, coo_col)),
-                   shape=(num_param, num_param))
-    A = A.tocsr()
-
     # Solve XYZ independently
     solved = np.zeros((num_param, 3))
-    for c in range(3):
-        b = b_offset[..., c]
-        b += laps[list(prm2org_map.values())][..., c]
-        solved[..., c] = linalg.spsolve(A, b)
-
+    if use_sparse:
+        # Sparse version
+        A = coo_matrix((coo_data, (coo_row, coo_col)),
+                       shape=(num_param, num_param))
+        A = A.tocsr()
+        for c in range(3):
+            b = b_offset[..., c]
+            b += laps[list(prm2org_map.values())][..., c]
+            solved[..., c] = linalg.spsolve(A, b)
+    else:
+        # Dense version
+        A = np.zeros((num_param, num_param))
+        for r, c, d in zip(coo_row, coo_col, coo_data):
+            A[r, c] = d
+        for c in range(3):
+            b = b_offset[..., c]
+            b += laps[list(prm2org_map.values())][..., c]
+            solved[..., c], residuals, rank, s = np.linalg.lstsq(A, b, None)
     # Copy to original index
     verts_poisson = verts_updated.copy()
     verts_poisson[list(prm2org_map.values())] = solved
@@ -208,7 +222,7 @@ def connect_mesh(verts0, indices0, boundary0, verts1, indices1, boundary1):
 
 def poisson_mesh_connecting(pinned_verts, pinned_indices, pinned_boundary_vids,
                             free_verts, free_indices, free_boundary_vids,
-                            connect):
+                            connect, use_sparse=is_scipy_available):
     # Alignment based on the boundary correspondence
     pinned_boundary_verts = pinned_verts[pinned_boundary_vids]
     free_boundary_verts = free_verts[free_boundary_vids]
@@ -221,7 +235,8 @@ def poisson_mesh_connecting(pinned_verts, pinned_indices, pinned_boundary_vids,
     # Solve poisson
     verts_poisson = solve_poisson_naive(free_verts_transed, free_indices,
                                         free_boundary_vids,
-                                        pinned_boundary_verts)
+                                        pinned_boundary_verts,
+                                        use_sparse)
     if not connect:
         return verts_poisson, free_indices
     return connect_mesh(pinned_verts, pinned_indices, pinned_boundary_vids,
