@@ -178,7 +178,13 @@ def solve_poisson_naive(verts, indices,
         for c in range(3):
             b = b_offset[..., c]
             b += laps[list(prm2org_map.values())][..., c]
-            solved[..., c], residuals, rank, s = np.linalg.lstsq(A, b, None)
+            try:
+                # Should always succeed...
+                solved[..., c] = np.linalg.solve(A, b)
+            except np.linalg.LinAlgError:
+                # Fail safe
+                solved[..., c], residuals, rank, s = np.linalg.lstsq(
+                    A, b, None)
     # Copy to original index
     verts_poisson = verts_updated.copy()
     verts_poisson[list(prm2org_map.values())] = solved
