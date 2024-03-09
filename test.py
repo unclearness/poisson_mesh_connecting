@@ -11,7 +11,7 @@ def load_boundary(path):
     return vids
 
 
-if __name__ == '__main__':
+def test_connecting():
     face = obj_io.loadObj('./data/face/mediapipe_face.obj')
     face_boundary = load_boundary('./data/face/boundary.txt')
     cylinder = obj_io.loadObj('./data/cylinder/cylinder.obj')
@@ -50,3 +50,28 @@ if __name__ == '__main__':
                          poisson_verts, poisson_indices)
     et = time.time()
     print('cylinder2face', 'dense', et - st)
+
+
+def test_replace():
+    sphere = obj_io.loadObj('./data/same_topology/sphere.obj')
+    cube = obj_io.loadObj('./data/same_topology/cube.obj')
+    building = obj_io.loadObj('./data/same_topology/building.obj')
+    same_boundary = load_boundary('./data/same_topology/boundary.txt')
+    st = time.time()
+    poisson_verts = pmc.poisson_mesh_replace(sphere.verts, cube.verts, sphere.indices, same_boundary)
+    et = time.time()
+    print('cube2sphere', 'sparse', et - st)
+    obj_io.saveObjSimple('cube2sphere.obj',
+                         poisson_verts, sphere.indices)
+    st = time.time()
+    poisson_verts = pmc.poisson_mesh_replace(sphere.verts, building.verts, sphere.indices, same_boundary)
+    et = time.time()
+    print('building2sphere', 'sparse', et - st)
+    obj_io.saveObjSimple('building2sphere.obj',
+                         poisson_verts, sphere.indices)
+
+
+if __name__ == '__main__':
+    test_replace()
+    test_connecting()
+
