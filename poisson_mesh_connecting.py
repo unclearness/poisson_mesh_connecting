@@ -1,4 +1,3 @@
-from networkx import boundary_expansion
 import numpy as np
 
 from geom_util import (
@@ -8,6 +7,7 @@ from geom_util import (
     generate_face_adjacency_mat,
     get_boundary_edges,
     remove_verts,
+    connect_mesh,
 )
 
 try:
@@ -94,40 +94,6 @@ def solve_poisson_naive(
     return verts_poisson
 
 
-def connect_mesh(verts0, indices0, boundary0, verts1, indices1, boundary1):
-    boundary12boundary0 = {}
-    for i in range(len(boundary0)):
-        boundary12boundary0[boundary1[i]] = boundary0[i]
-    boundary1_set = set(boundary1)
-
-    removed_vidx = 0
-    verts1_boundary_removed = []
-    vert1org2removed = {}
-    for vidx in range(len(verts1)):
-        if vidx in boundary1_set:
-            continue
-        verts1_boundary_removed.append(verts1[vidx])
-        vert1org2removed[vidx] = removed_vidx
-        removed_vidx += 1
-
-    merged_verts = np.concatenate((verts0, verts1_boundary_removed), axis=0)
-    merged_indices = indices0.tolist()
-
-    offset = len(verts0)
-
-    for fidx in range(len(indices1)):
-        new_face = [-1, -1, -1]
-        for j in range(3):
-            org_vid1 = indices1[fidx][j]
-            if org_vid1 in vert1org2removed:
-                new_face[j] = vert1org2removed[org_vid1] + offset
-            else:
-                new_face[j] = boundary12boundary0[org_vid1]
-        merged_indices.append(new_face)
-    merged_indices = np.array(merged_indices)
-    return merged_verts, merged_indices
-
-
 def poisson_mesh_connecting(
     pinned_verts,
     pinned_indices,
@@ -137,7 +103,7 @@ def poisson_mesh_connecting(
     free_boundary_vids,
     connect,
     use_sparse=_is_scipy_available,
-    similarity_transform=True
+    similarity_transform=True,
 ):
 
     pinned_boundary_verts = pinned_verts[pinned_boundary_vids]
@@ -172,7 +138,12 @@ def poisson_mesh_connecting(
 
 
 def poisson_mesh_replace(
-    pinned_verts, free_verts, indices, replace_vids, use_sparse=_is_scipy_available, similarity_transform=True
+    pinned_verts,
+    free_verts,
+    indices,
+    replace_vids,
+    use_sparse=_is_scipy_available,
+    similarity_transform=True,
 ):
 
     def get_boundary_vids(indices, vnum, vmask=None):
@@ -182,12 +153,7 @@ def poisson_mesh_replace(
 
     replace_mask = np.zeros((len(pinned_verts)), dtype=bool)
     replace_mask[replace_vids] = True
-    boundary_vids_ = get_boundary_vids(indices, len(pinned_verts), replace_mask)
-    # TODO: make better...
-    boundary_vids = []
-    for v in boundary_vids_:
-        if v in replace_vids:
-            boundary_vids.append(v)
+    boundary_vids = get_boundary_vids(indices, len(pinned_verts), replace_mask)
     free_mask = np.zeros((len(pinned_verts)), dtype=bool)
     free_mask[replace_vids] = True
     free_mask[boundary_vids] = False
@@ -220,7 +186,7 @@ def poisson_mesh_replace(
         free_boundary_vids,
         False,
         use_sparse=use_sparse,
-        similarity_transform=similarity_transform
+        similarity_transform=similarity_transform,
     )
 
     replaced = pinned_verts.copy()

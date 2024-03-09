@@ -1,7 +1,8 @@
 import numpy as np
 
 try:
-    from scipy.sparse import coo_matrix, linalg
+    from scipy.sparse import coo_matrix
+
     _is_scipy_available = True
 except ImportError:
     _is_scipy_available = False
@@ -98,8 +99,9 @@ def generate_vertex_adjacency(indices, vnum):
     return adj
 
 
-def generate_face_adjacency_mat(indices, vnum, vmask=None,
-                                use_sparse=_is_scipy_available):
+def generate_face_adjacency_mat(
+    indices, vnum, valid_vert_mask=None, use_sparse=_is_scipy_available
+):
     coo_row = []
     coo_col = []
     coo_data = []
@@ -109,24 +111,24 @@ def generate_face_adjacency_mat(indices, vnum, vmask=None,
         coo_col.append(c)
         coo_data.append(d)
 
-    if vmask is None:
-        vmask = np.ones((vnum), dtype=bool)
+    if valid_vert_mask is None:
+        valid_vert_mask = np.ones((vnum), dtype=bool)
 
     for fid, face in enumerate(indices):
-        #valid = vmask[face[0]] and vmask[face[1]] and vmask[face[2]]
-        #if not valid:
-        #    continue
-        if vmask[face[0]] and vmask[face[1]]:
-            add_triplet(face[0], face[1], fid + 1)
-        if vmask[face[1]] and vmask[face[2]]:
-            add_triplet(face[1], face[2], fid + 1)
-        if vmask[face[2]] and vmask[face[0]]:
-            add_triplet(face[2], face[0], fid + 1)
+        valid_face = (
+            valid_vert_mask[face[0]]
+            and valid_vert_mask[face[1]]
+            and valid_vert_mask[face[2]]
+        )
+        if not valid_face:
+            continue
+        add_triplet(face[0], face[1], fid + 1)
+        add_triplet(face[1], face[2], fid + 1)
+        add_triplet(face[2], face[0], fid + 1)
 
     if use_sparse:
         # Sparse version
-        A = coo_matrix((coo_data, (coo_row, coo_col)),
-                       shape=(vnum, vnum), dtype=int)
+        A = coo_matrix((coo_data, (coo_row, coo_col)), shape=(vnum, vnum), dtype=int)
         A = A.tocsr()
     else:
         # Dense version
@@ -139,19 +141,16 @@ def generate_face_adjacency_mat(indices, vnum, vmask=None,
 def get_boundary_edges(A, indices):
     boundary_edges = []
     for face in indices:
-        # Check the "reverse edge" face[1]->face[0]
-        # of the original edge face[0]->face[1]
-        m0 = A[face[1], face[0]]
-        if m0 == 0:
-            # If the reverse edge is not shared with other faces,
-            # add the original edge as a part of boundary
-            boundary_edges.append([face[0], face[1]])
-        m1 = A[face[2], face[1]]
-        if m1 == 0:
-            boundary_edges.append([face[1], face[2]])
-        m2 = A[face[2], face[0]]
-        if m2 == 0:
-            boundary_edges.append([face[0], face[2]])
+        for edge in [[0, 1], [1, 2], [2, 0]]:
+            idx0, idx1 = edge
+            # If valid_vert_mask was specified, face may not have edge
+            if A[face[idx0], face[idx1]] != 0:
+                # Check the "reverse edge" face[1]->face[0]
+                # of the original edge face[0]->face[1]
+                if A[face[idx1], face[idx0]] == 0:
+                    # If the reverse edge is not shared with other faces,
+                    # add the original edge as a part of boundary
+                    boundary_edges.append([face[idx0], face[idx1]])
     boundary_vids = set()
     for edge in boundary_edges:
         boundary_vids.add(edge[0])
@@ -236,5 +235,40 @@ def remove_vert_attrs(attrs_list, indices, to_remove_vids):
 
 def remove_verts(verts, indices, to_remove_vids):
     attrs, indices_removed, org2new = remove_vert_attrs(
-        [verts], indices, to_remove_vids)
+        [verts], indices, to_remove_vids
+    )
     return attrs[0], indices_removed, org2new
+
+
+def connect_mesh(verts0, indices0, boundary0, verts1, indices1, boundary1):
+    boundary12boundary0 = {}
+    for i in range(len(boundary0)):
+        boundary12boundary0[boundary1[i]] = boundary0[i]
+    boundary1_set = set(boundary1)
+
+    removed_vidx = 0
+    verts1_boundary_removed = []
+    vert1org2removed = {}
+    for vidx in range(len(verts1)):
+        if vidx in boundary1_set:
+            continue
+        verts1_boundary_removed.append(verts1[vidx])
+        vert1org2removed[vidx] = removed_vidx
+        removed_vidx += 1
+
+    merged_verts = np.concatenate((verts0, verts1_boundary_removed), axis=0)
+    merged_indices = indices0.tolist()
+
+    offset = len(verts0)
+
+    for fidx in range(len(indices1)):
+        new_face = [-1, -1, -1]
+        for j in range(3):
+            org_vid1 = indices1[fidx][j]
+            if org_vid1 in vert1org2removed:
+                new_face[j] = vert1org2removed[org_vid1] + offset
+            else:
+                new_face[j] = boundary12boundary0[org_vid1]
+        merged_indices.append(new_face)
+    merged_indices = np.array(merged_indices)
+    return merged_verts, merged_indices

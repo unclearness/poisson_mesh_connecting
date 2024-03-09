@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass, field
 from typing import TypeAlias
 import numpy as np
@@ -19,9 +18,9 @@ class ObjMesh:
     def eunsureNumpy(self):
         for k, v in self.__dict__.items():
             if not isinstance(getattr(self, k), np.ndarray):
-                if 'mtl' in k:
+                if "mtl" in k:
                     continue
-                elif 'indices' in k:
+                elif "indices" in k:
                     setattr(self, k, np.asarray(v, dtype=np.int32))
                 else:
                     setattr(self, k, np.asarray(v, dtype=float))
@@ -36,13 +35,14 @@ class ObjMesh:
 
         def normalize(v):
             return v / np.linalg.norm(v, axis=1, keepdims=True)
+
         if POLY_NUM >= 3:
             v10 = normalize(
-                self.verts[self.indices[..., 1]]
-                - self.verts[self.indices[..., 0]])
+                self.verts[self.indices[..., 1]] - self.verts[self.indices[..., 0]]
+            )
             v20 = normalize(
-                self.verts[self.indices[..., 2]]
-                - self.verts[self.indices[..., 0]])
+                self.verts[self.indices[..., 2]] - self.verts[self.indices[..., 0]]
+            )
             face_normals_tmp = normalize(np.cross(v10, v20, axis=1))
         else:
             raise Exception("")
@@ -53,17 +53,16 @@ class ObjMesh:
             def pca(X: np.array):
                 F, P, _ = X.shape
                 demean = X - X.mean(axis=1, keepdims=True)
-                cov = np.einsum('ikj,ikl->ijl', demean, demean)
+                cov = np.einsum("ikj,ikl->ijl", demean, demean)
                 vals, vecs = np.linalg.eig(cov)
                 min_index = np.argsort(vals, axis=1)
                 vecs = vecs.transpose(0, 2, 1)
-                n = np.take_along_axis(
-                    vecs, min_index[..., None], axis=1)
+                n = np.take_along_axis(vecs, min_index[..., None], axis=1)
                 return n[:, 0]
+
             face_verts = self.verts[self.indices]
             face_normals = pca(face_verts)
-            flipped_mask = np.einsum(
-                "ij,ij->i", face_normals_tmp, face_normals) < 0
+            flipped_mask = np.einsum("ij,ij->i", face_normals_tmp, face_normals) < 0
             face_normals[flipped_mask] *= -1.0
 
         counts = np.zeros(self.verts.shape[0], dtype=int)
@@ -134,7 +133,7 @@ def loadObjSimple(obj_path: str):
                     if len(w) > 2:
                         n_index.append(int(w[2]) - 1)
                     else:
-                        print('no normal index')
+                        print("no normal index")
                         n_index.append(int(w[0]) - 1)
             if len(v_index) > 0:
                 indices.append(v_index)
@@ -147,16 +146,26 @@ def loadObjSimple(obj_path: str):
                 valid_face = True
             if valid_face:
                 num_indices += 1
-        if vals[0] == 'mtllib':
+        if vals[0] == "mtllib":
             mtl_file = vals[1]
-        if vals[0] == 'usemtl':
+        if vals[0] == "usemtl":
             mtl_names.append(vals[1])
     if len(mtl_names) > 1:
         print(
-            'The first material will be used'
-            f'but there are {len(mtl_names)} materials')
-    return verts, uvs, normals, indices, uv_indices, normal_indices,\
-        vert_colors, mtl_file, mtl_names
+            "The first material will be used"
+            f"but there are {len(mtl_names)} materials"
+        )
+    return (
+        verts,
+        uvs,
+        normals,
+        indices,
+        uv_indices,
+        normal_indices,
+        vert_colors,
+        mtl_file,
+        mtl_names,
+    )
 
 
 def loadObj(obj_path: str, is_numpy: bool = True):
@@ -169,10 +178,17 @@ def loadObj(obj_path: str, is_numpy: bool = True):
 
 
 def saveObjSimple(
-        obj_path: str, verts: ObjIoVec, indices: ObjIoVec, uvs: ObjIoVec = [],
-        normals: ObjIoVec = [], uv_indices: ObjIoVec = [],
-        normal_indices: ObjIoVec = [], vert_colors: ObjIoVec = [],
-        mat_file: str = None, mat_name: str = None):
+    obj_path: str,
+    verts: ObjIoVec,
+    indices: ObjIoVec,
+    uvs: ObjIoVec = [],
+    normals: ObjIoVec = [],
+    uv_indices: ObjIoVec = [],
+    normal_indices: ObjIoVec = [],
+    vert_colors: ObjIoVec = [],
+    mat_file: str = None,
+    mat_name: str = None,
+):
     f_out = open(obj_path, "w")
     f_out.write("####\n")
     f_out.write("#\n")
@@ -218,16 +234,24 @@ def saveObjSimple(
 def saveObj(obj_path: str, mesh: ObjMesh):
     if len(mesh.mtl_names) > 1:
         print(
-            'The first material will be used'
-            f'but there are {len(mesh.mtl_names)} materials')
-    saveObjSimple(obj_path, mesh.verts, mesh.indices, mesh.uvs,
-                  mesh.normals, mesh.uv_indices,
-                  mesh.normal_indices, mesh.vert_colors, mesh.mtl_file,
-                  None if len(mesh.mtl_names) < 1 else mesh.mtl_names[0])
+            "The first material will be used"
+            f"but there are {len(mesh.mtl_names)} materials"
+        )
+    saveObjSimple(
+        obj_path,
+        mesh.verts,
+        mesh.indices,
+        mesh.uvs,
+        mesh.normals,
+        mesh.uv_indices,
+        mesh.normal_indices,
+        mesh.vert_colors,
+        mesh.mtl_file,
+        None if len(mesh.mtl_names) < 1 else mesh.mtl_names[0],
+    )
 
 
-def removeByVid(attrs_list: ObjIoVec, indices: ObjIoIndices,
-                to_remove_vids: ObjIoVec):
+def removeByVid(attrs_list: ObjIoVec, indices: ObjIoIndices, to_remove_vids: ObjIoVec):
     indices_ = []
     table = {}
     count = 0
