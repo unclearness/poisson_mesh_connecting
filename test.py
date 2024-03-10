@@ -82,7 +82,8 @@ def test_replace():
     sphere = obj_io.loadObj("./data/same_topology/sphere.obj")
     cube = obj_io.loadObj("./data/same_topology/cube.obj")
     building = obj_io.loadObj("./data/same_topology/building.obj")
-    replace_vids = load_vids("./data/same_topology/replace.txt")
+    replace_vids = load_vids("./data/same_topology/replace2.txt")
+
     st = time.time()
     poisson_verts = pmc.poisson_mesh_replace(
         sphere.verts, cube.verts, sphere.indices, replace_vids
@@ -90,6 +91,7 @@ def test_replace():
     et = time.time()
     print("cube2sphere", "sparse", et - st)
     obj_io.saveObjSimple("cube2sphere.obj", poisson_verts, sphere.indices)
+
     st = time.time()
     poisson_verts = pmc.poisson_mesh_replace(
         sphere.verts, building.verts, sphere.indices, replace_vids

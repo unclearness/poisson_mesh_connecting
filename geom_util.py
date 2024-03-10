@@ -1,3 +1,4 @@
+from matplotlib import axis
 import numpy as np
 
 try:
@@ -100,31 +101,43 @@ def generate_vertex_adjacency(indices, vnum):
 
 
 def generate_face_adjacency_mat(
-    indices, vnum, valid_vert_mask=None, use_sparse=_is_scipy_available
+    indices, vnum, valid_vert_mask=None, use_sparse=_is_scipy_available, for_loop=False
 ):
     coo_row = []
     coo_col = []
     coo_data = []
 
-    def add_triplet(r, c, d):
-        coo_row.append(r)
-        coo_col.append(c)
-        coo_data.append(d)
-
     if valid_vert_mask is None:
         valid_vert_mask = np.ones((vnum), dtype=bool)
+    valid_face_mask = valid_vert_mask[indices].sum(axis=-1) == 3
+    if for_loop:
 
-    for fid, face in enumerate(indices):
-        valid_face = (
-            valid_vert_mask[face[0]]
-            and valid_vert_mask[face[1]]
-            and valid_vert_mask[face[2]]
-        )
-        if not valid_face:
-            continue
-        add_triplet(face[0], face[1], fid + 1)
-        add_triplet(face[1], face[2], fid + 1)
-        add_triplet(face[2], face[0], fid + 1)
+        def add_triplet(r, c, d):
+            coo_row.append(r)
+            coo_col.append(c)
+            coo_data.append(d)
+
+        for fid, face in enumerate(indices):
+            if not valid_face_mask[fid]:
+                continue
+            add_triplet(face[0], face[1], fid + 1)
+            add_triplet(face[1], face[2], fid + 1)
+            add_triplet(face[2], face[0], fid + 1)
+    else:
+        valid_faces = indices[valid_face_mask]
+        valid_fids = np.arange(len(indices))[valid_face_mask] + 1
+        valid_fids3 = np.repeat(valid_fids, 3)
+        if False:
+            # Either is fine...
+            v0, v1, v2 = valid_faces.T
+            coo_row = np.concatenate([v0, v1, v2])
+            coo_col = np.concatenate([v1, v2, v0])
+        else:
+            coo_row = valid_faces.T.flatten()
+            coo_col = valid_faces.T
+            coo_col[[0, 1, 2]] = coo_col[[1, 2, 0]]
+            coo_col = coo_col.flatten()
+        coo_data = valid_fids3
 
     if use_sparse:
         # Sparse version
@@ -138,19 +151,33 @@ def generate_face_adjacency_mat(
     return A
 
 
-def get_boundary_edges(A, indices):
-    boundary_edges = []
-    for face in indices:
-        for edge in [[0, 1], [1, 2], [2, 0]]:
-            idx0, idx1 = edge
-            # If valid_vert_mask was specified, face may not have edge
-            if A[face[idx0], face[idx1]] != 0:
-                # Check the "reverse edge" face[1]->face[0]
-                # of the original edge face[0]->face[1]
-                if A[face[idx1], face[idx0]] == 0:
-                    # If the reverse edge is not shared with other faces,
-                    # add the original edge as a part of boundary
-                    boundary_edges.append([face[idx0], face[idx1]])
+def get_boundary_edges(A, indices, for_loop=False):
+    if for_loop:
+        # for-loop version: Slow
+        boundary_edges = []
+        for face in indices:
+            for edge in [[0, 1], [1, 2], [2, 0]]:
+                idx0, idx1 = edge
+                # If valid_vert_mask was specified, face may not have edge
+                if A[face[idx0], face[idx1]] != 0:
+                    # Check the "reverse edge" face[1]->face[0]
+                    # of the original edge face[0]->face[1]
+                    if A[face[idx1], face[idx0]] == 0:
+                        # If the reverse edge is not shared with other faces,
+                        # add the original edge as a part of boundary
+                        boundary_edges.append([face[idx0], face[idx1]])
+    else:
+        # Batch version: Fast
+        edge_idxs = [[0, 1], [1, 2], [2, 0]]
+        edges = indices[..., edge_idxs]
+        F, _, _ = edges.shape
+        edges = edges.reshape((F * 3, 2))
+        e0, e1 = edges[..., 0], edges[..., 1]
+        valid_edge_mask = np.asarray(A[e0, e1] != 0).flatten()
+        open_edge_mask = np.asarray(A[e1, e0] == 0).flatten()
+        boundary_edge_mask = valid_edge_mask * open_edge_mask
+        boundary_edges = edges[boundary_edge_mask]
+
     boundary_vids = set()
     for edge in boundary_edges:
         boundary_vids.add(edge[0])
@@ -160,6 +187,8 @@ def get_boundary_edges(A, indices):
 
 def find_boundary_loops(boundary_edges):
     boundary_loops = []
+    if type(boundary_edges) is np.ndarray:
+        boundary_edges = boundary_edges.tolist()
     cur_edge = boundary_edges.pop(0)
     cur_loop = []
     cur_loop.append(cur_edge)
@@ -170,6 +199,7 @@ def find_boundary_loops(boundary_edges):
                 cur_edge = edge
                 cur_loop.append(cur_edge)
                 connected_idx = idx
+                break
         if connected_idx > -1:
             boundary_edges.pop(connected_idx)
             continue
