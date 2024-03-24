@@ -12,10 +12,11 @@ from geom_util import (
 
 try:
     from scipy.sparse import coo_matrix, linalg
-
     _is_scipy_available = True
 except ImportError:
     _is_scipy_available = False
+    # Own implementation
+    from sparse import coo_matrix, linalg
 
 
 def solve_poisson_naive(
